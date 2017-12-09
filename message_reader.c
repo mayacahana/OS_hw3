@@ -1,3 +1,11 @@
+
+1	/*
+2	 * message_reader.c
+3	 *
+4	 *  Created on: Dec 9, 2017
+5	 *      Author: Maya Cahana
+6	 */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +15,7 @@
 int main(int argc, char* argv[]){
     if (argc < 2){
         printf("Error: number of command line arguments is invalid\n");
-        return -1;
+        return ERROR;
     }
     int file_desc, ret_val;
     int channel_id = atoi(argv[2]);
@@ -16,15 +24,17 @@ int main(int argc, char* argv[]){
     file_desc = open(file_name, O_RDONLY);
     if (file_desc < 0) {
         printf("Can not open device file: %d\n", file_name);
-        return -1;
+        return ERROR;
     }
+    /*sets device message slot to the right channel */
     ret_val = ioctl(file_desc,IOCTL_SET_ENC, channel_id);
     if (ret_val < 0){
         printf("ioctl set message have failed%d\n", ret_val);
         close(file_desc);
-        return -1;
+        return ERROR;
     }
     char buf[BUF_LEN+1];
+    /*reading message from device message slot channel without a loop = reading entire buffer or fail*/
     int read_num = read(file_dec, BUF_LEN);
     buf[read_num] = '\0';
     close(file_desc);
