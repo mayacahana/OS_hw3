@@ -5,6 +5,7 @@
 5	 *      Author: Maya Cahana
 6	 */
 
+
 #ifndef MESSAGE_SLOT_H
 #define MESSAGE_SLOT_H
 
@@ -18,8 +19,9 @@
 #define SUCCESS 0
 #define ERROR -1
 
+
 /*The major number for ioctls */
-#define MAJOR_NUM 245
+#define MAJOR_NUM 244
 
 
 #endif
