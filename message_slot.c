@@ -9,7 +9,6 @@
 #undef MODULE
 #define MODULE 
 #include "message_slot.h"
-
 #include <linux/kernel.h>  
 #include <linux/module.h>   
 #include <linux/fs.h>       /* for register_chrdev */
@@ -22,30 +21,34 @@ MODULE_LICENSE("GPL");
 // used to prevent concurent access into the same device
 static int dev_open_flag = 0;
 static struct chardev_info device_info;
-// The message the device will give when asked
-static char msg[BUF_LEN];
-// device major number
-static int major_num;
+
 
 // define struct for slots
 typedef struct msg_slot_struct{
     //TODO
-    char msg_buffs[4][128];
-    int channel_id;
+    //char msg_buffs[4][128];
     int minor_device_id;
+    int device_channel_id;
     struct msg_slot_struct* next;
-} MsgSlot
+    Message* msg;
+} MessageSlot
 
-MsgSlot* head;
+typedef struct message{
+    char buffer[BUF_LEN];
+    int channel_id;
+    struct message* next;
+} Message
+
+MessageSlot* head;
 
 //**********HELP FUNCTIONS***********
 static unsigned long get_minor(struct file *file_desc){
     iminor(file_desc->f_path.dentry->d_inode);
 }
 
-static void MsgSlot insertMsgSlot(MsgSlot* new_node){
-    MsgSlot* tmp_node = head;
-    if (head==0){
+static void MessageSlot insertMessageSlot(MessageSlot* new_node){
+    MessageSlot* tmp_node = head;
+    if (head == 0){
         head = new_node;
         return;
     } else {
@@ -56,10 +59,10 @@ static void MsgSlot insertMsgSlot(MsgSlot* new_node){
     }
 }
 
-static MsgSlot* getMsgSlot(int device_id){
-    MsgSlot* tmp_node = head;
+static MessageSlot* getMessageSlot(int device_id) {
+    MessageSlot* tmp_node = head;
     while (tmp_node != 0){
-        if(tmp_node->minor_device_id == device_id){
+        if(tmp_node->minor_device_id == device_id) {
             return tmp_node;
         }
         tmp_node = tmp_node->next;
@@ -71,16 +74,16 @@ static MsgSlot* getMsgSlot(int device_id){
 static int device_open(struct inode *inode, struct file *file){
     //TODO check if int or insigned long
     unsigned long device_id = get_minor(file);
-    MsgSlot *file_slot = getMsgSlot(device_id);
+    MessageSlot *file_slot = getMessageSlot(device_id);
     // if the device dont exist- file slot is null
     if (!file_slot){
-        MsgSlot* new_msgslot = (MsgSlot *)kmalloc(sizeof(MsgSlot), GFP_KERNEL);
-        new_msgslot->minor_device_id = device_id;
-        new_msgslot->channel_id = -1;
-        new_msgslot->next = NULL;
+        MessageSlot* new_MessageSlot = (MessageSlot *)kmalloc(sizeof(MessageSlot), GFP_KERNEL);
+        new_MessageSlot->minor_device_id = device_id;
+        new_MessageSlot->channel_id = -1;
+        new_MessageSlot->next = NULL;
         //HOW TO IMPLEMENT THE BUFFS
 
-        insertMsgSlot(new_msgslot);
+        insertMessageSlot(new_MessageSlot);
     }
     return SUCCESS;
 }
@@ -89,7 +92,7 @@ static int device_ioctl(struct inode* inode, unsinged int ioctl_command_id, unsi
     if (MSG_SLOT_CHANNEL == ioctl_command_id){
         int device_id = get_minor(file);
         // get the relevant slot
-        MsgSlot *file_slot = getMsgSlot(device_id);
+        MessageSlot *file_slot = getMessageSlot(device_id);
         if (!file_slot){ //not existing
             //check
         } else {
@@ -102,7 +105,7 @@ static int device_ioctl(struct inode* inode, unsinged int ioctl_command_id, unsi
 // ----------------------
 static int device_read(struct file* file, char __user* buffer, size_t length,loff_t* offset){
     int device_id = get_minor(file);
-    MsgSlot* file_slot = getMsgSlot(device_id);
+    MessageSlot* file_slot = getMessageSlot(device_id);
     if(!file_slot) {
         //TODO: Error device not 
         return -EINVAL;
@@ -110,5 +113,50 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     channel_id = file_slot->channel_id;
     // validate
     // copy value from kernel space to user space
-    
+    int i=0;
+    if (put_user(file_slot->msg_buffs[channel_id][0],buffer)!=0){
+
+    }
 }
+
+static int device_write{
+
+}
+
+static int device_release{
+
+}
+
+//********** DEVICE SETUP ************
+struct file_operations Fops = {
+    .read = device_read;
+    .write = device_write;
+    .unlocked_ioctl = device_ioctl;
+    .open = device_open;
+    .release = device_release;
+};
+// ----------------------
+// Init
+// ----------------------
+static int __init simple_init(void){
+    unsigned int rc = -1; //TODO:check this
+    head = 0;
+    // register driver capabilities. Obtain major num
+    rc = register_chrdev(MAJOR_NUM,DEVICE_RANGE_NAME, &Fops);
+    // validate
+    if (rc < 0) {
+        printk(KERN_ALERT "%s registraion failed for  %d\n",DEVICE_FILE_NAME, MAJOR_NUM);
+    return ERROR;
+    }
+    return SUCCESS;
+}
+// ----------------------
+// Exit & cleanup
+// ----------------------
+static void __exit simple_cleanup(void) {
+    // clean memory of the msg slot structs
+    //TODO
+    unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
+}
+module_init(simple_init);
+module_exit(simple_cleanup);
