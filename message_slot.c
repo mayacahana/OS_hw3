@@ -130,7 +130,7 @@ static int device_ioctl(struct inode* inode, unsinged int ioctl_command_id, unsi
 static int device_read(struct file* file, char __user* buffer, size_t length,loff_t* offset){
     if (length > BUF_LEN || length <= 0) {
         // message is too big or length is invalid. 
-        return -EINVAL;
+        return -ENOSPC;
     }
     int device_id = get_minor(file);
     MessageSlot* file_slot = getMessageSlot(device_id);
@@ -144,7 +144,7 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     msg = getMessage(channel_id);
     if (!msg){
         // trying to read from channel that nobody wroted to
-        return -EINVAL;
+        return -EWOULDBLOCK;
     }
     // check copy value from kernel space to user space
     if (put_user(msg->buffer,buffer)!=0){
@@ -164,6 +164,10 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
 }
 
 static int device_write (struct file *file, const char __user* buffer, size_t length, loff_t * offset ){
+    if (length > BUF_LEN || length <= 0) {
+        // message is too big or length is invalid. 
+        return -EINVAL;
+    }
     unsigned long device_id = get_minor(file);
     MessageSlot *file_slot = getMessageSlot(device_id);
     if(!file_slot) {
@@ -172,14 +176,36 @@ static int device_write (struct file *file, const char __user* buffer, size_t le
         return -EINVAL;
     }
     this_channelid = file_slot->channel_id;
+    Message* current_msg = file_slot->msg;
+    Message* tmp = NULL;
+    while (current_msg!=NULL && current_msg->channel_id != this_channelid){
+        tmp = current_msg;
+        current_msg = current_msg->next;
+    }
+    if (!msg) {
+        // no messages wrote to this channel
+        new_msg = (Message *)kmalloc(sizeof(Message),GFP_KERNEL)
+        if (!new_msg)
+            return -ENOMEM;
+        new_msg->next = NULL;
+        new_msg->channel_id = this_channelid;
+        if (tmp != NULL){
+            tmp->next = new_msg;
+        } else {
+            file_slot->msg = current_msg;
+        }
+    }
     // checking with the buffer
     char tmp;
     if (get_user(tmp, buffer) != 0){
         printk("Buffer not valid \n");
         return -EINVAL;
     }
-
-
+    int i;
+    for (i=0; i < BUF_LEN && i < length; i++){
+        get_user(current_msg->buffer[i], &buffer[i]);
+    }
+    return SUCCESS;
 }
 
 static int device_release{
