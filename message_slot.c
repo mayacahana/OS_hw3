@@ -42,7 +42,7 @@ MessageSlot* head;
 //**********HELP FUNCTIONS***********
 
 static int get_minor(struct file *file_desc){
-    return (file_desc->f_inode->i_ino;);
+    return iminor(file_desc->f_inode);
 }
 
 static void MessageSlot insertMessageSlot(MessageSlot* new_node){
@@ -126,7 +126,9 @@ static int device_ioctl(struct inode* inode, unsinged int ioctl_command_id, unsi
     }
     return SUCCESS;
 }
+
 // ----------------------
+
 static int device_read(struct file* file, char __user* buffer, size_t length,loff_t* offset){
     if (length > BUF_LEN || length <= 0) {
         // message is too big or length is invalid. 
@@ -162,6 +164,8 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     }
     return i;
 }
+
+// ----------------------
 
 static int device_write (struct file *file, const char __user* buffer, size_t length, loff_t * offset ){
     if (length > BUF_LEN || length <= 0) {
