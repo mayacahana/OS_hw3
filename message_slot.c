@@ -25,8 +25,6 @@ static struct chardev_info device_info;
 
 // define struct for slots
 typedef struct msg_slot_struct{
-    //TODO
-    //char msg_buffs[4][128];
     int minor_device_id;
     int device_channel_id;
     struct msg_slot_struct* next;
@@ -42,8 +40,9 @@ typedef struct message{
 MessageSlot* head;
 
 //**********HELP FUNCTIONS***********
-static unsigned long get_minor(struct file *file_desc){
-    iminor(file_desc->f_path.dentry->d_inode);
+
+static int get_minor(struct file *file_desc){
+    return (file_desc->f_inode->i_ino;);
 }
 
 static void MessageSlot insertMessageSlot(MessageSlot* new_node){
@@ -61,13 +60,36 @@ static void MessageSlot insertMessageSlot(MessageSlot* new_node){
 
 static MessageSlot* getMessageSlot(int device_id) {
     MessageSlot* tmp_node = head;
-    while (tmp_node != 0){
-        if(tmp_node->minor_device_id == device_id) {
+    while (tmp_node != 0) {
+        if (tmp_node->minor_device_id == device_id) {
             return tmp_node;
         }
         tmp_node = tmp_node->next;
     }
     return 0;
+}
+static Message* getMessage(int channel_id){
+    Message* tmp_node = head->msg;
+    while (tmp_node != 0){
+        if (tmp_node->channel_id == channel_id) {
+            return tmp_node;
+        }
+        tmp_node = tmp_node->next;
+    }
+}
+
+static void freeMem(){
+    Message* tmp_msg, tmp_slot;
+    while (head != NULL){
+        tmp_slot = head;
+        head = head->next;
+        while (tmp_slot->msg != NULL){
+            tmp_msg = tmp_slot->msg;
+            tmp_slot->msg = tmp_slpt->msg.next;
+            kfree(tmp->msg);
+        }
+        kfree(tmp->slot.next);
+    }
 }
 //********** DEVICE FUNCTIONS ************
 
@@ -76,13 +98,12 @@ static int device_open(struct inode *inode, struct file *file){
     unsigned long device_id = get_minor(file);
     MessageSlot *file_slot = getMessageSlot(device_id);
     // if the device dont exist- file slot is null
-    if (!file_slot){
+    if (!file_slot) {
         MessageSlot* new_MessageSlot = (MessageSlot *)kmalloc(sizeof(MessageSlot), GFP_KERNEL);
         new_MessageSlot->minor_device_id = device_id;
         new_MessageSlot->channel_id = -1;
         new_MessageSlot->next = NULL;
-        //HOW TO IMPLEMENT THE BUFFS
-
+        new_MessageSlot->msg = NULL;
         insertMessageSlot(new_MessageSlot);
     }
     return SUCCESS;
@@ -94,37 +115,75 @@ static int device_ioctl(struct inode* inode, unsinged int ioctl_command_id, unsi
         // get the relevant slot
         MessageSlot *file_slot = getMessageSlot(device_id);
         if (!file_slot){ //not existing
-            //check
+            printk("Channel index not found. \n");
+            return -EINVAL;
         } else {
             file_slot->channel_id = (int)ioctl_param;
-            // check if we have channel_id
-
         }
+    } else {
+        printk("Invalid command\n");
+        return -EINVAL;
     }
+    return SUCCESS;
 }
 // ----------------------
 static int device_read(struct file* file, char __user* buffer, size_t length,loff_t* offset){
+    if (length > BUF_LEN || length <= 0) {
+        // message is too big or length is invalid. 
+        return -EINVAL;
+    }
     int device_id = get_minor(file);
     MessageSlot* file_slot = getMessageSlot(device_id);
     if(!file_slot) {
-        //TODO: Error device not 
+        //TODO: Error device not found
+        printk("Slot with this ID was not found\n")
         return -EINVAL;
     }
     channel_id = file_slot->channel_id;
     // validate
-    // copy value from kernel space to user space
-    int i=0;
-    if (put_user(file_slot->msg_buffs[channel_id][0],buffer)!=0){
-
+    msg = getMessage(channel_id);
+    if (!msg){
+        // trying to read from channel that nobody wroted to
+        return -EINVAL;
     }
+    // check copy value from kernel space to user space
+    if (put_user(msg->buffer,buffer)!=0){
+        printk("Error with buffer\n");
+        return -EINVAL;
+    }
+    //check channel id
+    if (channel_id < 0){ //no channel has been set
+        printk("Channel was not set\n");
+        return -EINVAL;
+    }
+    int i;
+    for (i=0; i<length && i<BUF_LEN; i++){
+        put_user(msg->buffer[i], &buffer[i])
+    }
+    return i;
 }
 
-static int device_write{
+static int device_write (struct file *file, const char __user* buffer, size_t length, loff_t * offset ){
+    unsigned long device_id = get_minor(file);
+    MessageSlot *file_slot = getMessageSlot(device_id);
+    if(!file_slot) {
+        // Error slot not found
+        printk("Slot with this ID was not found\n")
+        return -EINVAL;
+    }
+    this_channelid = file_slot->channel_id;
+    // checking with the buffer
+    char tmp;
+    if (get_user(tmp, buffer) != 0){
+        printk("Buffer not valid \n");
+        return -EINVAL;
+    }
+
 
 }
 
 static int device_release{
-
+    return 0;
 }
 
 //********** DEVICE SETUP ************
@@ -155,7 +214,8 @@ static int __init simple_init(void){
 // ----------------------
 static void __exit simple_cleanup(void) {
     // clean memory of the msg slot structs
-    //TODO
+    freeMem();
+    // unregister device
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
 }
 module_init(simple_init);
