@@ -19,9 +19,9 @@ int main(int argc, char* argv[]){
     }
     int file_desc, ret_val;
     int channel_id = atoi(argv[2]);
-    char file_name[MAX_PATH] = "/dev/";
-    strcat(file_name, argv[1]);
-    file_desc = open(file_name, O_RDONLY);
+    // char file_name[MAX_PATH] = "/dev/";
+    // strcat(file_name, argv[1]);
+    file_desc = open("/dev/"argv[1], O_RDONLY);
     if (file_desc < 0) {
         printf("Can not open device file: %d\n", file_name);
         return ERROR;
@@ -36,9 +36,6 @@ int main(int argc, char* argv[]){
     char buf[BUF_LEN+1];
     // reading message from device message slot channel without a loop = reading entire buffer or fail
     int read_num = read(file_dec, BUF_LEN);
-    //TODO: If no channel has been set, returns -1 and sets errno to EINVAL
-    //TODO: If no message exists on the channel, returns -1 and sets errno to EWOULDBLOCK
-    //TODO: If the provided buffer is too small to hold the message, returns -1 and sets errno to ENOSPC
     buf[read_num] = '\0';
     close(file_desc);
     printf("The message is: %s\n", buf);
