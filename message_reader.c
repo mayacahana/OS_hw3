@@ -26,7 +26,7 @@ int main(int argc, char* argv[]){
         printf("Can not open device file: %d\n", file_name);
         return ERROR;
     }
-    /*sets device message slot to the right channel */
+    // sets device message slot to the right channel
     ret_val = ioctl(file_desc,MSG_SLOT_CHANNEL, channel_id);
     if (ret_val < 0){
         printf("ioctl set message have failed%d\n", ret_val);

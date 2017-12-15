@@ -23,6 +23,8 @@
 /*The major number for ioctls */
 #define MAJOR_NUM 244
 
+/*Set the message of the device driver */
+#define MSG_SLOT_CHANNEL _IOW(MAJOR_NUM, 0, unsigned long)
 
 #endif
 
