@@ -1,9 +1,9 @@
-1	/*
-2	 * message_slot.h
-3	 *
-4	 *  Created on: Dec 9, 2017
-5	 *      Author: Maya Cahana
-6	 */
+// 1	/*
+// 2	 * message_slot.h
+// 3	 *
+// 4	 *  Created on: Dec 9, 2017
+// 5	 *      Author: Maya Cahana
+// 6	 */
 
 
 #ifndef MESSAGE_SLOT_H

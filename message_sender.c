@@ -1,9 +1,11 @@
-1	/*
-2	 * message_sender.c
-3	 *
-4	 *  Created on: Dec 9, 2017
-5	 *      Author: Maya Cahana
-6	 */
+// 1	/*
+// 2	 * message_sender.c
+// 3	 *
+// 4	 *  Created on: Dec 9, 2017
+// 5	 *      Author: Maya Cahana
+// 6	 */
+
+#include "message_slot.h"
 
 #include <fcntl.h>      /* open */
 #include <unistd.h>     /* exit */
@@ -11,10 +13,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "message_slot.h"
+#include <errno.h>
 
+int main(int argc, char* argv[]) 
 
-int main(int argc, char* argv[]){
+{
     if (argc < 3){
         printf("Error: num of command line args is invalid \n");
         return ERROR;
@@ -23,7 +26,7 @@ int main(int argc, char* argv[]){
     int channel_id = atoi(argv[2]);
     //char file_name[MAX_PATH] = "/dev/";
     //strcat(file_name, argv[1]);
-    file_desc = open("/dev/"argv[1], O_RDWR);
+    file_desc = open(argv[1], O_RDWR);
     if (file_desc < 0){
         printf("Can not open device file: %s\n");
         return ERROR;

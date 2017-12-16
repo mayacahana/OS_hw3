@@ -12,16 +12,15 @@
 #include <linux/kernel.h>  
 #include <linux/module.h>   
 #include <linux/fs.h>       /* for register_chrdev */
-#include <asm/uaccess.h>
-#include <linux/uaccess.h>  
+#include <asm/uaccess.h>  
 #include <linux/string.h>  
 #include <linux/slab.h> 
 
 MODULE_LICENSE("GPL");
 
 // used to prevent concurent access into the same device
-//static int dev_open_flag = 0;
-//static struct chardev_info device_info;
+static int dev_open_flag = 0;
+static struct chardev_info device_info;
 
 typedef struct message{
     char buffer[BUF_LEN];
@@ -69,30 +68,28 @@ static MessageSlot* getMessageSlot(int device_id) {
     }
     return 0;
 }
-static Message* getMessage(int channel_id) {
+static Message* getMessage(int channel_id){
     Message* tmp_node = head->msg;
-    while (tmp_node != 0) {
+    while (tmp_node != 0){
         if (tmp_node->channel_id == channel_id) {
             return tmp_node;
         }
         tmp_node = tmp_node->next;
     }
-	return tmp_node;
 }
 
 static void freeMem(void){
-    Message *tmp_msg, *this_msg_delete;
-	MessageSlot *slot_to_delete;
+    Message* tmp_msg;
+    MessageSlot* tmp_slot;
     while (head != NULL){
-        tmp_msg = head->msg;
-        while (tmp_msg != NULL){
-            this_msg_delete = tmp_msg;
-            tmp_msg = tmp_msg->next;
-            kfree(this_msg_delete);
+        tmp_slot = head;
+        head = head->next;
+        while (tmp_slot->msg != NULL){
+            tmp_msg = tmp_slot->msg;
+            tmp_slot->msg = tmp_slpt->msg.next;
+            kfree(tmp_msg);
         }
-		slot_to_delete = head;
-		head = head->next;
-        kfree(slot_to_delete);
+        kfree(tmp->slot.next);
     }
 }
 //********** DEVICE FUNCTIONS ************
@@ -113,9 +110,7 @@ static int device_open(struct inode *inode, struct file *file){
     return SUCCESS;
 }
 // ----------------------
-static long device_ioctl(struct   file* file,
-                          unsigned int   ioctl_command_id,
-                          unsigned long  ioctl_param){
+static int device_ioctl(struct inode* inode, unsinged int ioctl_command_id, unsigned int ioctl_param){
     if (MSG_SLOT_CHANNEL == ioctl_command_id){
         int device_id = get_minor(file);
         // get the relevant slot
@@ -124,7 +119,7 @@ static long device_ioctl(struct   file* file,
             printk("Channel index not found. \n");
             return -EINVAL;
         } else {
-            file_slot->device_channel_id = (int)ioctl_param;
+            file_slot->channel_id = (int)ioctl_param;
         }
     } else {
         printk("Invalid command\n");
@@ -142,14 +137,12 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     }
     int device_id = get_minor(file);
     MessageSlot* file_slot = getMessageSlot(device_id);
-	Message*  msg = NULL;
-	int channel_id;
     if(!file_slot) {
         //TODO: Error device not found
         printk("Slot with this ID was not found\n");
         return -EINVAL;
     }
-    channel_id = file_slot->device_channel_id;
+    channel_id = file_slot->channel_id;
     // validate
     msg = getMessage(channel_id);
     if (!msg){
@@ -168,45 +161,39 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     }
     int i;
     for (i=0; i<length && i<BUF_LEN; i++){
-        put_user(msg->buffer[i], &buffer[i]);
+        put_user(msg->buffer[i], &buffer[i])
     }
     return i;
 }
 
 // ----------------------
 
-static int device_write (struct file *file, const char __user* buffer, size_t length, loff_t* offset){
-    unsigned long device_id = get_minor(file);
-	MessageSlot *file_slot = getMessageSlot(device_id);
-	Message* current_msg = file_slot->msg;
-    Message* tmp = NULL;
-	Message* new_msg = NULL;
-	int this_channel_id, i;
-	char tmp_ch;
-
-	if (length > BUF_LEN || length <= 0) {
+static int device_write (struct file *file, const char __user* buffer, size_t length, loff_t * offset ){
+    if (length > BUF_LEN || length <= 0) {
         // message is too big or length is invalid. 
         return -EINVAL;
     }
-    
+    unsigned long device_id = get_minor(file);
+    MessageSlot *file_slot = getMessageSlot(device_id);
     if(!file_slot) {
         // Error slot not found
-        printk("Slot with this ID was not found\n");
+        printk("Slot with this ID was not found\n")
         return -EINVAL;
     }
-    this_channel_id = file_slot->device_channel_id;
-    
-    while (current_msg!=NULL && current_msg->channel_id != this_channel_id){
+    this_channelid = file_slot->channel_id;
+    Message* current_msg = file_slot->msg;
+    Message* tmp = NULL;
+    while (current_msg!=NULL && current_msg->channel_id != this_channelid){
         tmp = current_msg;
         current_msg = current_msg->next;
     }
-    if (!current_msg) {
+    if (!msg) {
         // no messages wrote to this channel
-        new_msg = (Message *)kmalloc(sizeof(Message),GFP_KERNEL);
+        new_msg = (Message *)kmalloc(sizeof(Message),GFP_KERNEL)
         if (!new_msg)
             return -ENOMEM;
         new_msg->next = NULL;
-        new_msg->channel_id = this_channel_id;
+        new_msg->channel_id = this_channelid;
         if (tmp != NULL){
             tmp->next = new_msg;
         } else {
@@ -214,28 +201,29 @@ static int device_write (struct file *file, const char __user* buffer, size_t le
         }
     }
     // checking with the buffer
-    if (get_user(tmp_ch, buffer) != 0){
+    char tmp;
+    if (get_user(tmp, buffer) != 0){
         printk("Buffer not valid \n");
         return -EINVAL;
     }
+    int i;
     for (i=0; i < BUF_LEN && i < length; i++){
         get_user(current_msg->buffer[i], &buffer[i]);
     }
     return SUCCESS;
 }
 
-static int device_release (struct inode* inode,
-                           struct file*  file){
+static int device_release{
     return 0;
 }
 
 //********** DEVICE SETUP ************
 struct file_operations Fops = {
-    .read = device_read,
-    .write = device_write,
-    .unlocked_ioctl = device_ioctl,
-    .open = device_open,
-    .release = device_release,
+    .read = device_read;
+    .write = device_write;
+    .unlocked_ioctl = device_ioctl;
+    .open = device_open;
+    .release = device_release;
 };
 // ----------------------
 // Init
