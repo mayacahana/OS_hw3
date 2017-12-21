@@ -11,7 +11,6 @@
 
 #include <linux/ioctl.h>
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
 #define DEVICE_RANGE_NAME "message_slot"
 #define BUF_LEN 128 /*Instructions: A message is a string, at most 128 bytes long. */ 
 #define MAX_PATH 260
@@ -21,10 +20,10 @@
 
 
 /*The major number for ioctls */
-#define MAJOR_NUM 244
+#define MAJOR_NUMBER 244
 
 /*Set the message of the device driver */
-#define MSG_SLOT_CHANNEL _IOW(MAJOR_NUM, 0, unsigned long)
+#define MSG_SLOT_CHANNEL _IOW(MAJOR_NUMBER, 0, unsigned long)
 
 #endif
 
