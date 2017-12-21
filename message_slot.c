@@ -39,7 +39,7 @@ typedef struct msg_slot_struct{
 } MessageSlot;
 
 
-MessageSlot* head;
+MessageSlot* head = NULL;
 
 //**********HELP FUNCTIONS***********
 
@@ -50,6 +50,7 @@ static int get_minor(struct file *file_desc){
 static void insertMessageSlot(MessageSlot* new_node){
     MessageSlot* tmp_node = head;
     if (head == 0){
+    	//printk("head init\n");
         head = new_node;
         return;
     } else {
@@ -61,6 +62,10 @@ static void insertMessageSlot(MessageSlot* new_node){
 }
 static void insertMessage(MessageSlot* msg_slot, Message* new_channel){
     Message* tmp = msg_slot->msg;
+    if (tmp == 0) {
+    	msg_slot->msg = new_channel;
+    	return;
+    }
     while (tmp->next != 0){
         tmp = tmp->next;
     }
@@ -75,21 +80,14 @@ static MessageSlot* getMessageSlot(int device_id) {
         }
         tmp_node = tmp_node->next;
     }
+    printk("return 0");
+
     return 0;
 }
-// static Message* getMessage(int channel_id) {
-//     Message* tmp_node = head->msg;
-//     while (tmp_node != 0) {
-//         if (tmp_node->channel_id == channel_id) {
-//             return tmp_node;
-//         }
-//         tmp_node = tmp_node->next;
-//     }
-// 	return tmp_node;
-// }
+
 static Message* getMessage(MessageSlot* msg_slot, int channel_id){
     Message* tmp = msg_slot->msg;
-    while (tmp!=0){
+    while (tmp != 0){
         if (tmp->channel_id == channel_id){
             return tmp;
         }
@@ -130,7 +128,7 @@ static Message* createMessage(MessageSlot* msg_slot, int channel_id){
         return 0;
     }
     new_msg->channel_id = channel_id;
-    memset(new_msg->buffer,'\0',BUF_LEN);
+    memset(new_msg->buffer,0,BUF_LEN);
     new_msg->next = 0;
     new_msg->flag_msg = false;
     return new_msg;
@@ -140,13 +138,19 @@ static Message* createMessage(MessageSlot* msg_slot, int channel_id){
 static int device_open(struct inode *inode, struct file *file){
     //TODO check if int or insigned long
     int device_id = get_minor(file);
-    MessageSlot *file_slot = getMessageSlot(device_id);
+    MessageSlot *file_slot;
+    printk("device id: %d\n", device_id);
+    file_slot = getMessageSlot(device_id);
     // if the device dont exist- file slot is null
-	printk("entering device_open \n");
     if (!file_slot) {
+    	printk("create new message slot\n");
         file_slot = createMessageSlot(device_id);
+        if (!file_slot){
+        	return -ENOMEM;
+        }
         insertMessageSlot(file_slot);
     }
+    //printk("done device_open \n");
     return SUCCESS;
 }
 // ----------------------
@@ -154,11 +158,12 @@ static long device_ioctl(struct file* file,
                           unsigned int   ioctl_command_id,
                           unsigned long  ioctl_param){
 	Message* msg;
-    printk("enter device_ioctl\n");
+	MessageSlot *file_slot;
+    // printk("enter device_ioctl\n");
     if (MSG_SLOT_CHANNEL == ioctl_command_id){
         int device_id = get_minor(file);
         // get the relevant slot
-        MessageSlot *file_slot = getMessageSlot(device_id);
+        file_slot = getMessageSlot(device_id);
         if (!file_slot){ //not existing
             printk("Device slot not found. \n");
             return -EINVAL;
@@ -167,14 +172,19 @@ static long device_ioctl(struct file* file,
             if (!msg){
                 //No channel with this id. creating one
                 Message* new_msg = createMessage(file_slot, ioctl_param);
+                if (!new_msg) {
+                	return -ENOMEM;
+                }
                 insertMessage(file_slot, new_msg);
             }
             file->private_data = (void*)ioctl_param;
         }
+    file->private_data = (void*)ioctl_param;
     } else {
         printk("Invalid command\n");
         return -EINVAL;
     }
+    // printk("DONE ioctl\n");
     return SUCCESS;
 }
 
@@ -185,14 +195,8 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     MessageSlot* file_slot = getMessageSlot(device_id);
 	Message*  msg = 0;
 	int channel_id, i;
-	printk("entering device_read\n");
-
-	if (length > BUF_LEN || length <= 0) {
-        // message is too big or length is invalid. 
-        return -ENOSPC;
-    }
     if(!file_slot) {
-        //TODO: Error device not found
+        // Error device not found
         printk("Slot with this ID was not found\n");
         return -EINVAL;
     }
@@ -204,24 +208,27 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
     msg = getMessage(file_slot,channel_id);
     if (!msg){
         // trying to read from channel that nobody wroted to
-        if (!msg->flag_msg)
+        printk("Channel with this ID was not found\n");
+        return -EINVAL;
+    } else {
+    	//if (msg->buffer[0] == '\0')
+    	if (strlen(msg->buffer) == 0){
             return -EWOULDBLOCK;
-        else
-            return -EINVAL;
+        }
     }
-
-    // check copy value from kernel space to user space
-    //if (put_user(msg->buffer,buffer)!=0){
-    //    printk("Error with buffer\n");
-    //    return -EINVAL;
-    //}
-    //check channel id
+	if (length > BUF_LEN) {
+        // message is too big or length is invalid. 
+        return -ENOSPC;
+    }
     if (length < strlen(msg->buffer)){
         return -ENOSPC;
     }
-    for (i=0; i<length && i<BUF_LEN; i++){
-        put_user(msg->buffer[i], &buffer[i]);
+    for (i=0; i < strlen(msg->buffer)+1 && i<BUF_LEN; i++) {
+    	if (put_user(msg->buffer[i], &buffer[i]) != 0) {
+    		return -EFAULT;
+        }
     }
+    printk("num of read: %d\n", i);
     return i;
 }
 
@@ -230,11 +237,8 @@ static int device_read(struct file* file, char __user* buffer, size_t length,lof
 static int device_write (struct file *file, const char __user* buffer, size_t length, loff_t* offset){
     unsigned long device_id = get_minor(file);
 	MessageSlot *file_slot = getMessageSlot(device_id);
-	Message* current_msg = file_slot->msg;
-    Message* tmp = NULL;
-	// Message* new_msg = NULL;
-	int this_channel_id, i;
-	char tmp_ch;
+	Message* current_msg;
+	int this_channel_id, i, cnt=0;
 	printk("entering device_write\n");
 	if (length > BUF_LEN || length <= 0) {
         // message is too big or length is invalid. 
@@ -246,34 +250,27 @@ static int device_write (struct file *file, const char __user* buffer, size_t le
         return -EINVAL;
     }
     this_channel_id = (int) (uintptr_t)file->private_data;
-    // new_msg = getMessage(file_slot,this_channel_id);
-
-    while (current_msg != 0 && current_msg->channel_id != this_channel_id){
-        tmp = current_msg;
-        current_msg = current_msg->next;
-    }
+	// printk("this channel id: %d\n", this_channel_id);
+	current_msg = getMessage(file_slot, this_channel_id);
     if (!current_msg) {
-        // no messages wrote to this channel
-        current_msg = createMessage(file_slot, this_channel_id);
-        if (tmp != NULL){
-            tmp->next = current_msg;
-        } else {
-            file_slot->msg = current_msg;
-        }
-        
+    	return -EINVAL;
     }
-    if (strlen(current_msg->buffer) > BUF_LEN)
-        return -EINVAL;
-    
-    if (get_user(tmp_ch, buffer) != 0){
-        printk("Buffer not valid \n");
+
+    if (length > BUF_LEN) {
         return -EINVAL;
     }
+	printk("the length is: %d\n", length);
     for (i=0; i < BUF_LEN && i < length; i++){
-        get_user(current_msg->buffer[i], &buffer[i]);
+        if (get_user(current_msg->buffer[i], &buffer[i]) != 0){
+        	return -EFAULT;
+        	}
+        cnt++;
     }
+    current_msg->buffer[length] = '\0';
     current_msg->flag_msg = true;
-    return SUCCESS;
+    // printk("DONE writing to buff\n");
+    printk("num of write: %d\n", cnt);
+    return cnt;
 }
 
 static int device_release (struct inode* inode,
@@ -294,9 +291,13 @@ struct file_operations Fops = {
 // ----------------------
 static int __init simple_init(void){
     unsigned int rc = -1; //TODO:check this
+    printk("simple init");
+
     head = 0;
     // register driver capabilities. Obtain major num
     rc = register_chrdev(MAJOR_NUMBER,DEVICE_RANGE_NAME, &Fops);
+    printk("Simple init after register chrdev");
+	printk("rc: %d",rc);
     // validate
     if (rc < 0) {
         printk(KERN_ALERT "%s registraion failed for  %d\n",DEVICE_FILE_NAME, MAJOR_NUMBER);

@@ -24,20 +24,27 @@ int main(int argc, char* argv[])
     }
     int file_desc, ret_val;
     int channel_id = atoi(argv[2]);
+    printf("my channel_id: %d\n", channel_id);
+    printf("file_dec: %s\n", argv[1]);
     //char file_name[MAX_PATH] = "/dev/";
     //strcat(file_name, argv[1]);
     file_desc = open(argv[1], O_RDWR);
     if (file_desc < 0){
-        printf("Can not open device file: %s\n");
+        printf("ERROR: Could not open device file. %s\n", strerror(errno));
         return ERROR;
     } 
     ret_val = ioctl(file_desc, MSG_SLOT_CHANNEL, channel_id);
     if (ret_val < 0){
-        printf("Ioctl set meddage failed. %d\n",ret_val);
+        printf("ERROR: ioctl set message have failed. %s\n", strerror(errno));
         close(file_desc);
         return ERROR;
     }
     int num_written = write(file_desc,argv[3], strlen(argv[3]));
+    if (num_written < 0) {
+    	printf("ERROR: write failed. %s\n", strerror(errno));
+    	close(file_desc);
+        return ERROR;
+    }
     close(file_desc);
     printf("Status: number of chars written to the device is: %d\n", num_written);
     return SUCCESS;
